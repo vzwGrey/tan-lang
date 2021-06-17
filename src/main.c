@@ -91,20 +91,35 @@ typedef struct AST_NODE
   };
 } AST_NODE;
 
-void ParseEOF(char const **source)
+TOKEN ExpectToken(char const **source, TOKEN_KIND expected_kind)
 {
   TOKEN token;
-  // TODO: Make/Use `ExpectToken` function.
-  NextToken(source, &token);
-  assert(token.kind == TOKEN_EOF && "Expected EOF token");
+  if (!NextToken(source, &token))
+  {
+    fprintf(stderr, "Encountered an unknown token character '%c'.\n", **source);
+    // If the expected token was not found make one up to try to resume parsing.
+    return (TOKEN){.kind = expected_kind, .start = *source, .len = 0};
+  }
+
+  if (token.kind != expected_kind)
+  {
+    fprintf(stderr, "Expected token %s but found token %s.\n", TokenKindName(token.kind),
+            TokenKindName(expected_kind));
+    // If the expected token was not found make one up to try to resume parsing.
+    return (TOKEN){.kind = expected_kind, .start = *source, .len = 0};
+  }
+
+  return token;
+}
+
+void ParseEOF(char const **source)
+{
+  ExpectToken(source, TOKEN_EOF);
 }
 
 AST_NODE *ParseConstantNumber(char const **source)
 {
-  TOKEN token;
-  // TODO: Make/Use `ExpectToken` function.
-  NextToken(source, &token);
-  assert(token.kind == TOKEN_NUMBER && "Expected number token");
+  TOKEN token = ExpectToken(source, TOKEN_NUMBER);
 
   AST_NODE *node = malloc(sizeof(*node));
   node->kind = NODE_CONSTANT_NUMBER;
