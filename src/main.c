@@ -45,6 +45,13 @@ void NumberToken(char const **source, TOKEN *token)
   while (isdigit(CURRENT_CHAR(source)))
     (*source)++;
 
+  if (CURRENT_CHAR(source) == '.')
+  {
+    (*source)++;
+    while (isdigit(CURRENT_CHAR(source)))
+      (*source)++;
+  }
+
   token->kind = TOKEN_NUMBER;
   token->start = start;
   token->len = *source - start;
