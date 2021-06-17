@@ -103,15 +103,15 @@ TOKEN ExpectToken(char const **source, TOKEN_KIND expected_kind)
   TOKEN token;
   if (!NextToken(source, &token))
   {
-    fprintf(stderr, "Encountered an unknown token character '%c'.\n", **source);
+    fprintf(stderr, "Encountered an unknown character '%c'.\n", **source);
     // If the expected token was not found make one up to try to resume parsing.
     return (TOKEN){.kind = expected_kind, .start = *source, .len = 0};
   }
 
   if (token.kind != expected_kind)
   {
-    fprintf(stderr, "Expected token %s but found token %s.\n", TokenKindName(token.kind),
-            TokenKindName(expected_kind));
+    fprintf(stderr, "Expected token %s but found token %s.\n", TokenKindName(expected_kind),
+            TokenKindName(token.kind));
     // If the expected token was not found make one up to try to resume parsing.
     return (TOKEN){.kind = expected_kind, .start = *source, .len = 0};
   }
