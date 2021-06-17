@@ -14,7 +14,9 @@
 typedef enum
 {
   TOKEN_EOF = 0,
+  TOKEN_ERROR,
   TOKEN_NUMBER,
+  TOKEN_PLUS,
 } TOKEN_KIND;
 
 typedef struct
@@ -28,10 +30,14 @@ char const *TokenKindName(TOKEN_KIND kind)
 {
   switch (kind)
   {
-    case TOKEN_NUMBER:
-      return "number";
     case TOKEN_EOF:
       return "end of file";
+    case TOKEN_ERROR:
+      return "<error>";
+    case TOKEN_NUMBER:
+      return "number";
+    case TOKEN_PLUS:
+      return "'+'";
     default:
       assert(!"TokenKindName: unreachable");
       return NULL;
@@ -39,17 +45,18 @@ char const *TokenKindName(TOKEN_KIND kind)
 }
 
 #define CURRENT_CHAR(source) (**source)
+#define ADVANCE(source) ((*source)++)
 void NumberToken(char const **source, TOKEN *token)
 {
   char const *start = *source;
   while (isdigit(CURRENT_CHAR(source)))
-    (*source)++;
+    ADVANCE(source);
 
   if (CURRENT_CHAR(source) == '.')
   {
-    (*source)++;
+    ADVANCE(source);
     while (isdigit(CURRENT_CHAR(source)))
-      (*source)++;
+      ADVANCE(source);
   }
 
   token->kind = TOKEN_NUMBER;
@@ -57,27 +64,42 @@ void NumberToken(char const **source, TOKEN *token)
   token->len = *source - start;
 }
 
-bool NextToken(char const **source, TOKEN *token)
+void NextToken(char const **source, TOKEN *token)
 {
   if (CURRENT_CHAR(source) == 0)
   {
     token->kind = TOKEN_EOF;
     token->start = *source;
     token->len = 0;
-    return true;
+    return;
   }
 
   while (isspace(CURRENT_CHAR(source)))
-    (*source)++;
+    ADVANCE(source);
 
   if (isdigit(CURRENT_CHAR(source)))
   {
     NumberToken(source, token);
-    return true;
+    return;
   }
 
-  return false;
+  switch (CURRENT_CHAR(source))
+  {
+    case '+':
+      token->kind = TOKEN_PLUS;
+      token->start = *source;
+      token->len = 1;
+      ADVANCE(source);
+      return;
+  }
+
+  fprintf(stderr, "Encountered an unknown character '%c'.\n", CURRENT_CHAR(source));
+  token->kind = TOKEN_ERROR;
+  token->start = *source;
+  token->len = 1;
+  ADVANCE(source);
 }
+#undef ADVANCE
 #undef CURRENT_CHAR
 
 // ---------------
@@ -86,7 +108,13 @@ bool NextToken(char const **source, TOKEN *token)
 
 typedef enum
 {
+  BINOP_ADDITION = TOKEN_PLUS,
+} BINARY_OPERATION_KIND;
+
+typedef enum
+{
   NODE_CONSTANT_NUMBER,
+  NODE_BINARY_OPERATION,
 } AST_NODE_KIND;
 
 typedef struct AST_NODE
@@ -95,38 +123,70 @@ typedef struct AST_NODE
   union
   {
     double constant_number;
+    struct
+    {
+      struct AST_NODE *left;
+      struct AST_NODE *right;
+      BINARY_OPERATION_KIND op;
+    } binary_operation;
   };
 } AST_NODE;
 
-TOKEN ExpectToken(char const **source, TOKEN_KIND expected_kind)
+typedef struct
+{
+  char const *source;
+  TOKEN peeked_token;
+  bool has_peeked_token;
+} PARSER_STATE;
+
+void GetToken(PARSER_STATE *state, TOKEN *token)
+{
+  if (state->has_peeked_token)
+    memcpy(token, &state->peeked_token, sizeof(*token));
+  else
+    NextToken(&state->source, token);
+}
+
+TOKEN ExpectToken(PARSER_STATE *state, TOKEN_KIND expected_kind)
 {
   TOKEN token;
-  if (!NextToken(source, &token))
-  {
-    fprintf(stderr, "Encountered an unknown character '%c'.\n", **source);
-    // If the expected token was not found make one up to try to resume parsing.
-    return (TOKEN){.kind = expected_kind, .start = *source, .len = 0};
-  }
+  GetToken(state, &token);
+  state->has_peeked_token = false;
 
   if (token.kind != expected_kind)
   {
     fprintf(stderr, "Expected token %s but found token %s.\n", TokenKindName(expected_kind),
             TokenKindName(token.kind));
     // If the expected token was not found make one up to try to resume parsing.
-    return (TOKEN){.kind = expected_kind, .start = *source, .len = 0};
+    return (TOKEN){.kind = expected_kind, .start = state->source, .len = 0};
   }
 
   return token;
 }
 
-void ParseEOF(char const **source)
+bool PeekToken(PARSER_STATE *state, TOKEN_KIND expected_kind)
 {
-  ExpectToken(source, TOKEN_EOF);
+  TOKEN token;
+  GetToken(state, &token);
+  if (token.kind == expected_kind)
+  {
+    state->has_peeked_token = false;
+    return true;
+  }
+
+  state->peeked_token = token;
+  state->has_peeked_token = true;
+  return false;
 }
 
-AST_NODE *ParseConstantNumber(char const **source)
+void ParseEOF(PARSER_STATE *state)
 {
-  TOKEN token = ExpectToken(source, TOKEN_NUMBER);
+  ExpectToken(state, TOKEN_EOF);
+}
+
+AST_NODE *ParseConstantNumber(PARSER_STATE *state)
+{
+  TOKEN token = ExpectToken(state, TOKEN_NUMBER);
 
   AST_NODE *node = malloc(sizeof(*node));
   node->kind = NODE_CONSTANT_NUMBER;
@@ -135,15 +195,49 @@ AST_NODE *ParseConstantNumber(char const **source)
   return node;
 }
 
-AST_NODE *ParseProgram(char const **source)
+AST_NODE *ParseBinaryOperation(PARSER_STATE *state)
 {
-  AST_NODE *node = ParseConstantNumber(source);
-  ParseEOF(source);
+  AST_NODE *left = ParseConstantNumber(state);
+
+  if (PeekToken(state, TOKEN_PLUS))
+  {
+    AST_NODE *node = malloc(sizeof(*node));
+    node->kind = NODE_BINARY_OPERATION;
+    node->binary_operation.left = left;
+    node->binary_operation.right = ParseBinaryOperation(state);
+    node->binary_operation.op = TOKEN_PLUS;
+
+    left = node;
+  }
+
+  return left;
+}
+
+AST_NODE *ParseProgram(char const *source)
+{
+  PARSER_STATE state = {
+      .source = source,
+      .has_peeked_token = false,
+  };
+
+  AST_NODE *node = ParseBinaryOperation(&state);
+  ParseEOF(&state);
+
   return node;
 }
 
-void FreeAST(AST_NODE *node)
+void FreeASTNode(AST_NODE *node)
 {
+  switch (node->kind)
+  {
+    case NODE_CONSTANT_NUMBER:
+      break;
+    case NODE_BINARY_OPERATION:
+      FreeASTNode(node->binary_operation.left);
+      FreeASTNode(node->binary_operation.right);
+      break;
+  }
+
   free(node);
 }
 
@@ -151,18 +245,38 @@ void FreeAST(AST_NODE *node)
 // Interpreter
 // ---------------
 
+double Evaluate(AST_NODE *node);
+
 double EvaluateConstantNumber(AST_NODE *node)
 {
   assert(node->kind == NODE_CONSTANT_NUMBER);
   return node->constant_number;
 }
 
-double EvaluateProgram(AST_NODE *node)
+double EvaluateBinaryOperation(AST_NODE *node)
+{
+  assert(node->kind == NODE_BINARY_OPERATION);
+  double left = Evaluate(node->binary_operation.left);
+  double right = Evaluate(node->binary_operation.right);
+  switch (node->binary_operation.op)
+  {
+    case BINOP_ADDITION:
+      return left + right;
+      break;
+  }
+
+  assert(!"EvaluateBinaryOperation: unreachable");
+  return 0.0;
+}
+
+double Evaluate(AST_NODE *node)
 {
   switch (node->kind)
   {
     case NODE_CONSTANT_NUMBER:
       return EvaluateConstantNumber(node);
+    case NODE_BINARY_OPERATION:
+      return EvaluateBinaryOperation(node);
     default:
       assert(!"EvaluateProgram: unreachable");
       return 0.0;
@@ -195,12 +309,12 @@ int main(void)
       continue;
 
     char const *source = line;
-    AST_NODE *ast = ParseProgram(&source);
+    AST_NODE *ast = ParseProgram(source);
 
-    double result = EvaluateProgram(ast);
+    double result = Evaluate(ast);
     printf("\t%f\n", result);
 
-    FreeAST(ast);
+    FreeASTNode(ast);
 
     free(line);
   }
