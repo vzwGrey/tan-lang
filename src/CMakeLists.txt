@@ -1,4 +1,7 @@
-add_executable(tan main.c)
+add_executable(tan main.c
+                   lexer.c
+                   parser.c
+                   interpreter.c)
 set_property(TARGET tan PROPERTY C_STANDARD 11)
 
 target_include_directories(tan PRIVATE /usr/include/readline)
