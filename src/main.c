@@ -24,6 +24,8 @@ bool ReadInput(char const *prompt, char **line)
 
 int main(void)
 {
+  INTERPRETER_STATE interpreter = NewInterpreterState(256);
+
   char *line;
   while (ReadInput(">> ", &line))
   {
@@ -33,13 +35,15 @@ int main(void)
     char const *source = line;
     AST_NODE *ast = ParseProgram(source);
 
-    double result = Evaluate(ast);
+    double result = Evaluate(&interpreter, ast);
     printf("\t%f\n", result);
 
     FreeAST(ast);
 
     free(line);
   }
+
+  FreeInterpreterState(&interpreter);
 
   return 0;
 }

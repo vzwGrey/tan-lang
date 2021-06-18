@@ -25,10 +25,14 @@ char const *TokenKindName(TOKEN_KIND kind)
       return "'/'";
     case TOKEN_COMMA:
       return "','";
-    default:
-      assert(!"TokenKindName: unreachable");
-      return NULL;
+    case TOKEN_EQUAL:
+      return "'='";
+    case TOKEN_IDENT:
+      return "identifier";
   }
+
+  assert(!"TokenKindName: unreachable");
+  return NULL;
 }
 
 #define CURRENT_CHAR(source) (**source)
@@ -51,6 +55,18 @@ static void NumberToken(char const **source, TOKEN *token)
   token->len = *source - start;
 }
 
+static void IdentToken(char const **source, TOKEN *token)
+{
+  char const *start = *source;
+
+  while (CURRENT_CHAR(source) == '_' || isalnum(CURRENT_CHAR(source)))
+    ADVANCE(source);
+
+  token->kind = TOKEN_IDENT;
+  token->start = start;
+  token->len = *source - start;
+}
+
 void NextToken(char const **source, TOKEN *token)
 {
   if (CURRENT_CHAR(source) == 0)
@@ -67,6 +83,12 @@ void NextToken(char const **source, TOKEN *token)
   if (isdigit(CURRENT_CHAR(source)))
   {
     NumberToken(source, token);
+    return;
+  }
+
+  if (CURRENT_CHAR(source) == '_' || isalpha(CURRENT_CHAR(source)))
+  {
+    IdentToken(source, token);
     return;
   }
 
@@ -96,6 +118,9 @@ void NextToken(char const **source, TOKEN *token)
       return;
     case ',':
       SINGLE_CHAR_TOK(TOKEN_COMMA);
+      return;
+    case '=':
+      SINGLE_CHAR_TOK(TOKEN_EQUAL);
       return;
   }
 #undef SINGLE_CHAR_TOK

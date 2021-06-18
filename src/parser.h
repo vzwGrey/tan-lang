@@ -15,6 +15,8 @@ typedef enum
 {
   NODE_CONSTANT_NUMBER,
   NODE_BINARY_OPERATION,
+  NODE_ASSIGNMENT,
+  NODE_VARIABLE,
 } AST_NODE_KIND;
 
 typedef struct AST_NODE
@@ -29,6 +31,12 @@ typedef struct AST_NODE
       struct AST_NODE *right;
       BINARY_OPERATION_KIND op;
     } binary_operation;
+    struct
+    {
+      char *var_name;
+      struct AST_NODE *value;
+    } assignment;
+    char *variable;
   };
 } AST_NODE;
 

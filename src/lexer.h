@@ -12,6 +12,8 @@ typedef enum
   TOKEN_STAR,
   TOKEN_SLASH,
   TOKEN_COMMA,
+  TOKEN_EQUAL,
+  TOKEN_IDENT,
 } TOKEN_KIND;
 
 typedef struct

@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "parser.h"
 
@@ -67,9 +68,32 @@ static AST_NODE *ParseConstantNumber(PARSER_STATE *state)
   return node;
 }
 
+static AST_NODE *ParseVariable(PARSER_STATE *state)
+{
+  TOKEN token = ExpectToken(state, TOKEN_IDENT);
+
+  AST_NODE *node = malloc(sizeof(*node));
+  node->kind = NODE_VARIABLE;
+  node->variable = strndup(token.start, token.len);
+
+  return node;
+}
+
+static AST_NODE *ParseTerm(PARSER_STATE *state)
+{
+  TOKEN next_token = PeekToken(state);
+  switch (next_token.kind)
+  {
+    case TOKEN_IDENT:
+      return ParseVariable(state);
+    default:
+      return ParseConstantNumber(state);
+  }
+}
+
 static AST_NODE *ParseFactor(PARSER_STATE *state)
 {
-  AST_NODE *left = ParseConstantNumber(state);
+  AST_NODE *left = ParseTerm(state);
 
   TOKEN next_token = PeekToken(state);
   if (next_token.kind == TOKEN_STAR || next_token.kind == TOKEN_SLASH)
@@ -109,9 +133,37 @@ static AST_NODE *ParseSum(PARSER_STATE *state)
   return left;
 }
 
+static AST_NODE *ParseAssignment(PARSER_STATE *state)
+{
+  PARSER_STATE saved_state = *state;
+
+  TOKEN token = PeekToken(state);
+  if (token.kind == TOKEN_IDENT)
+  {
+    ConsumePeekedToken(state);
+
+    TOKEN equal = PeekToken(state);
+    if (equal.kind != TOKEN_EQUAL)
+    {
+      *state = saved_state;
+      return ParseSum(state);
+    }
+    ConsumePeekedToken(state);
+
+    AST_NODE *assignment = malloc(sizeof(*assignment));
+    assignment->kind = NODE_ASSIGNMENT;
+    assignment->assignment.var_name = strndup(token.start, token.len);
+    assignment->assignment.value = ParseSum(state);
+
+    return assignment;
+  }
+  else
+    return ParseSum(state);
+}
+
 static AST_NODE *ParseSequence(PARSER_STATE *state)
 {
-  AST_NODE *left = ParseSum(state);
+  AST_NODE *left = ParseAssignment(state);
 
   TOKEN next_token = PeekToken(state);
   if (next_token.kind == TOKEN_COMMA)
@@ -152,6 +204,13 @@ void FreeAST(AST_NODE *node)
     case NODE_BINARY_OPERATION:
       FreeAST(node->binary_operation.left);
       FreeAST(node->binary_operation.right);
+      break;
+    case NODE_ASSIGNMENT:
+      free(node->assignment.var_name);
+      free(node->assignment.value);
+      break;
+    case NODE_VARIABLE:
+      free(node->variable);
       break;
   }
 
