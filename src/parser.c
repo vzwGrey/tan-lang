@@ -52,6 +52,8 @@ static TOKEN PeekToken(PARSER_STATE *state)
   return token;
 }
 
+static AST_NODE *ParseSequence(PARSER_STATE *state);
+
 static void ParseEOF(PARSER_STATE *state)
 {
   ExpectToken(state, TOKEN_EOF);
@@ -79,16 +81,53 @@ static AST_NODE *ParseVariable(PARSER_STATE *state)
   return node;
 }
 
+static AST_NODE *ParseLambda(PARSER_STATE *state)
+{
+  ExpectToken(state, TOKEN_FN);
+  ExpectToken(state, TOKEN_OPAREN);
+  ExpectToken(state, TOKEN_CPAREN);
+  ExpectToken(state, TOKEN_OBRACE);
+  AST_NODE *lambda = malloc(sizeof(*lambda));
+  lambda->kind = NODE_LAMBDA;
+  lambda->lambda.body = ParseSequence(state);
+  ExpectToken(state, TOKEN_CBRACE);
+
+  return lambda;
+}
+
 static AST_NODE *ParseTerm(PARSER_STATE *state)
 {
+  AST_NODE *term;
+
   TOKEN next_token = PeekToken(state);
   switch (next_token.kind)
   {
     case TOKEN_IDENT:
-      return ParseVariable(state);
+      term = ParseVariable(state);
+      break;
+    case TOKEN_FN:
+      term = ParseLambda(state);
+      break;
     default:
-      return ParseConstantNumber(state);
+      term = ParseConstantNumber(state);
+      break;
   }
+
+  TOKEN oparen = PeekToken(state);
+  if (oparen.kind == TOKEN_OPAREN)
+  {
+    ConsumePeekedToken(state);
+
+    AST_NODE *call = malloc(sizeof(*call));
+    call->kind = NODE_CALL;
+    call->call.fn = term;
+
+    ExpectToken(state, TOKEN_CPAREN);
+
+    return call;
+  }
+
+  return term;
 }
 
 static AST_NODE *ParseFactor(PARSER_STATE *state)
@@ -193,26 +232,4 @@ AST_NODE *ParseProgram(char const *source)
   ParseEOF(&state);
 
   return node;
-}
-
-void FreeAST(AST_NODE *node)
-{
-  switch (node->kind)
-  {
-    case NODE_CONSTANT_NUMBER:
-      break;
-    case NODE_BINARY_OPERATION:
-      FreeAST(node->binary_operation.left);
-      FreeAST(node->binary_operation.right);
-      break;
-    case NODE_ASSIGNMENT:
-      free(node->assignment.var_name);
-      free(node->assignment.value);
-      break;
-    case NODE_VARIABLE:
-      free(node->variable);
-      break;
-  }
-
-  free(node);
 }

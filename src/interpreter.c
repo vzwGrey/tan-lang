@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "interpreter.h"
+#include "unreachable.h"
 
 INTERPRETER_STATE NewInterpreterState(size_t num_variables)
 {
@@ -14,14 +15,17 @@ void FreeInterpreterState(INTERPRETER_STATE *state)
 {
   for (size_t i = 0; i < state->num_variables; i++)
   {
-    char *name = state->variables[i].name;
-    if (name != NULL)
-      free(name);
+    VARIABLE *var = &state->variables[i];
+    if (var->name != NULL)
+    {
+      free(var->name);
+      FreeValue(&var->value);
+    }
   }
   free(state->variables);
 }
 
-static void SetVariable(INTERPRETER_STATE *state, char const *name, double value)
+static void SetVariable(INTERPRETER_STATE *state, char const *name, VALUE value)
 {
   for (size_t i = 0; i < state->num_variables; i++)
   {
@@ -47,7 +51,7 @@ static void SetVariable(INTERPRETER_STATE *state, char const *name, double value
   assert(!"SetVariable: out of free variables.");
 }
 
-static double GetVariable(INTERPRETER_STATE *state, char const *name)
+static VALUE GetVariable(INTERPRETER_STATE *state, char const *name)
 {
   for (size_t i = 0; i < state->num_variables; i++)
   {
@@ -59,55 +63,68 @@ static double GetVariable(INTERPRETER_STATE *state, char const *name)
   }
 
   assert(!"GetVariable: unknown variable.");
-  return 0.0;
+  unreachable();
 }
 
-static double EvaluateConstantNumber(INTERPRETER_STATE *state, AST_NODE *node)
+static VALUE EvaluateConstantNumber(INTERPRETER_STATE *state, AST_NODE *node)
 {
   (void)state;
 
   assert(node->kind == NODE_CONSTANT_NUMBER);
-  return node->constant_number;
+  return ValueNumber(node->constant_number);
 }
 
-static double EvaluateBinaryOperation(INTERPRETER_STATE *state, AST_NODE *node)
+static VALUE EvaluateBinaryOperation(INTERPRETER_STATE *state, AST_NODE *node)
 {
   assert(node->kind == NODE_BINARY_OPERATION);
-  double left = Evaluate(state, node->binary_operation.left);
-  double right = Evaluate(state, node->binary_operation.right);
+
+  VALUE left = Evaluate(state, node->binary_operation.left);
+  VALUE right = Evaluate(state, node->binary_operation.right);
+
   switch (node->binary_operation.op)
   {
     case BINOP_ADD:
-      return left + right;
+      return ValueAdd(left, right);
     case BINOP_SUB:
-      return left - right;
+      return ValueSub(left, right);
     case BINOP_MUL:
-      return left * right;
+      return ValueMul(left, right);
     case BINOP_DIV:
-      return left / right;
+      return ValueDiv(left, right);
     case BINOP_SEQ:
       return right;
   }
-
-  assert(!"EvaluateBinaryOperation: unreachable");
-  return 0.0;
 }
 
-static double EvaluateAssignment(INTERPRETER_STATE *state, AST_NODE *node)
+static VALUE EvaluateAssignment(INTERPRETER_STATE *state, AST_NODE *node)
 {
   assert(node->kind == NODE_ASSIGNMENT);
-  double value = Evaluate(state, node->assignment.value);
+  VALUE value = Evaluate(state, node->assignment.value);
   SetVariable(state, node->assignment.var_name, value);
   return value;
 }
 
-static double EvaluateVariable(INTERPRETER_STATE *state, AST_NODE *node)
+static VALUE EvaluateVariable(INTERPRETER_STATE *state, AST_NODE *node)
 {
   assert(node->kind == NODE_VARIABLE);
   return GetVariable(state, node->variable);
 }
 
-double Evaluate(INTERPRETER_STATE *state, AST_NODE *node)
+static VALUE EvaluateLambda(INTERPRETER_STATE *state, AST_NODE *node)
+{
+  assert(node->kind == NODE_LAMBDA);
+  return ValueLambda(node->lambda.body);
+}
+
+static VALUE EvaluateCall(INTERPRETER_STATE *state, AST_NODE *node)
+{
+  assert(node->kind == NODE_CALL);
+  VALUE fn = Evaluate(state, node->call.fn);
+  assert(fn.kind == VALUE_LAMBDA && "EvaluateCall: only functions can be called");
+  return Evaluate(state, fn.lambda.body);
+}
+
+VALUE Evaluate(INTERPRETER_STATE *state, AST_NODE *node)
 {
   switch (node->kind)
   {
@@ -119,8 +136,12 @@ double Evaluate(INTERPRETER_STATE *state, AST_NODE *node)
       return EvaluateAssignment(state, node);
     case NODE_VARIABLE:
       return EvaluateVariable(state, node);
+    case NODE_LAMBDA:
+      return EvaluateLambda(state, node);
+    case NODE_CALL:
+      return EvaluateCall(state, node);
   }
 
   assert(!"EvaluateProgram: unreachable");
-  return 0.0;
+  unreachable();
 }

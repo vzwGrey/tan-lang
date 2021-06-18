@@ -1,11 +1,12 @@
 #pragma once
 
 #include "parser.h"
+#include "value.h"
 
 typedef struct
 {
   char *name;
-  double value;
+  VALUE value;
 } VARIABLE;
 
 typedef struct
@@ -16,4 +17,4 @@ typedef struct
 
 INTERPRETER_STATE NewInterpreterState(size_t num_variables);
 void FreeInterpreterState(INTERPRETER_STATE *state);
-double Evaluate(INTERPRETER_STATE *state, AST_NODE *node);
+VALUE Evaluate(INTERPRETER_STATE *state, AST_NODE *node);

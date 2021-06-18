@@ -15,6 +15,8 @@ char const *TokenKindName(TOKEN_KIND kind)
       return "<error>";
     case TOKEN_NUMBER:
       return "number";
+    case TOKEN_IDENT:
+      return "identifier";
     case TOKEN_PLUS:
       return "'+'";
     case TOKEN_MINUS:
@@ -27,8 +29,16 @@ char const *TokenKindName(TOKEN_KIND kind)
       return "','";
     case TOKEN_EQUAL:
       return "'='";
-    case TOKEN_IDENT:
-      return "identifier";
+    case TOKEN_OPAREN:
+      return "'('";
+    case TOKEN_CPAREN:
+      return "')'";
+    case TOKEN_OBRACE:
+      return "'{'";
+    case TOKEN_CBRACE:
+      return "'}'";
+    case TOKEN_FN:
+      return "'fn'";
   }
 
   assert(!"TokenKindName: unreachable");
@@ -80,6 +90,18 @@ void NextToken(char const **source, TOKEN *token)
   while (isspace(CURRENT_CHAR(source)))
     ADVANCE(source);
 
+  if (strncmp("fn", *source, 2) == 0)
+  {
+    token->kind = TOKEN_FN;
+    token->start = *source;
+    token->len = 2;
+
+    ADVANCE(source);
+    ADVANCE(source);
+
+    return;
+  }
+
   if (isdigit(CURRENT_CHAR(source)))
   {
     NumberToken(source, token);
@@ -121,6 +143,18 @@ void NextToken(char const **source, TOKEN *token)
       return;
     case '=':
       SINGLE_CHAR_TOK(TOKEN_EQUAL);
+      return;
+    case '(':
+      SINGLE_CHAR_TOK(TOKEN_OPAREN);
+      return;
+    case ')':
+      SINGLE_CHAR_TOK(TOKEN_CPAREN);
+      return;
+    case '{':
+      SINGLE_CHAR_TOK(TOKEN_OBRACE);
+      return;
+    case '}':
+      SINGLE_CHAR_TOK(TOKEN_CBRACE);
       return;
   }
 #undef SINGLE_CHAR_TOK

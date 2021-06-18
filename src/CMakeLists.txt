@@ -1,6 +1,8 @@
 add_executable(tan main.c
                    lexer.c
+                   ast.c
                    parser.c
+                   value.c
                    interpreter.c)
 set_property(TARGET tan PROPERTY C_STANDARD 11)
 

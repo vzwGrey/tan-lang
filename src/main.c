@@ -35,8 +35,10 @@ int main(void)
     char const *source = line;
     AST_NODE *ast = ParseProgram(source);
 
-    double result = Evaluate(&interpreter, ast);
-    printf("\t%f\n", result);
+    VALUE result = Evaluate(&interpreter, ast);
+    putc('\t', stdout);
+    PrintValue(&result);
+    putc('\n', stdout);
 
     FreeAST(ast);
 

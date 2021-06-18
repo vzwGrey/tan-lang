@@ -14,6 +14,11 @@ typedef enum
   TOKEN_COMMA,
   TOKEN_EQUAL,
   TOKEN_IDENT,
+  TOKEN_OPAREN,
+  TOKEN_CPAREN,
+  TOKEN_OBRACE,
+  TOKEN_CBRACE,
+  TOKEN_FN,
 } TOKEN_KIND;
 
 typedef struct
