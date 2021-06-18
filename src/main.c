@@ -17,6 +17,9 @@ typedef enum
   TOKEN_ERROR,
   TOKEN_NUMBER,
   TOKEN_PLUS,
+  TOKEN_MINUS,
+  TOKEN_STAR,
+  TOKEN_SLASH,
 } TOKEN_KIND;
 
 typedef struct
@@ -38,6 +41,12 @@ char const *TokenKindName(TOKEN_KIND kind)
       return "number";
     case TOKEN_PLUS:
       return "'+'";
+    case TOKEN_MINUS:
+      return "'-'";
+    case TOKEN_STAR:
+      return "'*'";
+    case TOKEN_SLASH:
+      return "'/'";
     default:
       assert(!"TokenKindName: unreachable");
       return NULL;
@@ -91,6 +100,24 @@ void NextToken(char const **source, TOKEN *token)
       token->len = 1;
       ADVANCE(source);
       return;
+    case '-':
+      token->kind = TOKEN_MINUS;
+      token->start = *source;
+      token->len = 1;
+      ADVANCE(source);
+      return;
+    case '*':
+      token->kind = TOKEN_STAR;
+      token->start = *source;
+      token->len = 1;
+      ADVANCE(source);
+      return;
+    case '/':
+      token->kind = TOKEN_SLASH;
+      token->start = *source;
+      token->len = 1;
+      ADVANCE(source);
+      return;
   }
 
   fprintf(stderr, "Encountered an unknown character '%c'.\n", CURRENT_CHAR(source));
@@ -108,7 +135,10 @@ void NextToken(char const **source, TOKEN *token)
 
 typedef enum
 {
-  BINOP_ADDITION = TOKEN_PLUS,
+  BINOP_ADD = TOKEN_PLUS,
+  BINOP_SUB = TOKEN_MINUS,
+  BINOP_MUL = TOKEN_STAR,
+  BINOP_DIV = TOKEN_SLASH,
 } BINARY_OPERATION_KIND;
 
 typedef enum
@@ -142,9 +172,15 @@ typedef struct
 void GetToken(PARSER_STATE *state, TOKEN *token)
 {
   if (state->has_peeked_token)
-    memcpy(token, &state->peeked_token, sizeof(*token));
+    *token = state->peeked_token;
   else
     NextToken(&state->source, token);
+}
+
+void ConsumePeekedToken(PARSER_STATE *state)
+{
+  assert(state->has_peeked_token && "ConsumePeekedToken: no peeked token available");
+  state->has_peeked_token = false;
 }
 
 TOKEN ExpectToken(PARSER_STATE *state, TOKEN_KIND expected_kind)
@@ -164,19 +200,13 @@ TOKEN ExpectToken(PARSER_STATE *state, TOKEN_KIND expected_kind)
   return token;
 }
 
-bool PeekToken(PARSER_STATE *state, TOKEN_KIND expected_kind)
+TOKEN PeekToken(PARSER_STATE *state)
 {
   TOKEN token;
   GetToken(state, &token);
-  if (token.kind == expected_kind)
-  {
-    state->has_peeked_token = false;
-    return true;
-  }
-
   state->peeked_token = token;
   state->has_peeked_token = true;
-  return false;
+  return token;
 }
 
 void ParseEOF(PARSER_STATE *state)
@@ -195,17 +225,41 @@ AST_NODE *ParseConstantNumber(PARSER_STATE *state)
   return node;
 }
 
-AST_NODE *ParseBinaryOperation(PARSER_STATE *state)
+AST_NODE *ParseFactor(PARSER_STATE *state)
 {
   AST_NODE *left = ParseConstantNumber(state);
 
-  if (PeekToken(state, TOKEN_PLUS))
+  TOKEN next_token = PeekToken(state);
+  if (next_token.kind == TOKEN_STAR || next_token.kind == TOKEN_SLASH)
   {
+    ConsumePeekedToken(state);
+
     AST_NODE *node = malloc(sizeof(*node));
     node->kind = NODE_BINARY_OPERATION;
     node->binary_operation.left = left;
-    node->binary_operation.right = ParseBinaryOperation(state);
-    node->binary_operation.op = TOKEN_PLUS;
+    node->binary_operation.right = ParseFactor(state);
+    node->binary_operation.op = next_token.kind;
+
+    left = node;
+  }
+
+  return left;
+}
+
+AST_NODE *ParseSum(PARSER_STATE *state)
+{
+  AST_NODE *left = ParseFactor(state);
+
+  TOKEN next_token = PeekToken(state);
+  if (next_token.kind == TOKEN_PLUS || next_token.kind == TOKEN_MINUS)
+  {
+    ConsumePeekedToken(state);
+
+    AST_NODE *node = malloc(sizeof(*node));
+    node->kind = NODE_BINARY_OPERATION;
+    node->binary_operation.left = left;
+    node->binary_operation.right = ParseSum(state);
+    node->binary_operation.op = next_token.kind;
 
     left = node;
   }
@@ -220,7 +274,7 @@ AST_NODE *ParseProgram(char const *source)
       .has_peeked_token = false,
   };
 
-  AST_NODE *node = ParseBinaryOperation(&state);
+  AST_NODE *node = ParseSum(&state);
   ParseEOF(&state);
 
   return node;
@@ -260,9 +314,14 @@ double EvaluateBinaryOperation(AST_NODE *node)
   double right = Evaluate(node->binary_operation.right);
   switch (node->binary_operation.op)
   {
-    case BINOP_ADDITION:
+    case BINOP_ADD:
       return left + right;
-      break;
+    case BINOP_SUB:
+      return left - right;
+    case BINOP_MUL:
+      return left * right;
+    case BINOP_DIV:
+      return left / right;
   }
 
   assert(!"EvaluateBinaryOperation: unreachable");
