@@ -20,6 +20,7 @@ typedef enum
   TOKEN_MINUS,
   TOKEN_STAR,
   TOKEN_SLASH,
+  TOKEN_COMMA,
 } TOKEN_KIND;
 
 typedef struct
@@ -47,6 +48,8 @@ char const *TokenKindName(TOKEN_KIND kind)
       return "'*'";
     case TOKEN_SLASH:
       return "'/'";
+    case TOKEN_COMMA:
+      return "','";
     default:
       assert(!"TokenKindName: unreachable");
       return NULL;
@@ -92,33 +95,34 @@ void NextToken(char const **source, TOKEN *token)
     return;
   }
 
+#define SINGLE_CHAR_TOK(k)                                                                         \
+  do                                                                                               \
+  {                                                                                                \
+    token->kind = (k);                                                                             \
+    token->start = *source;                                                                        \
+    token->len = 1;                                                                                \
+    ADVANCE(source);                                                                               \
+  }                                                                                                \
+  while (false)
+
   switch (CURRENT_CHAR(source))
   {
     case '+':
-      token->kind = TOKEN_PLUS;
-      token->start = *source;
-      token->len = 1;
-      ADVANCE(source);
+      SINGLE_CHAR_TOK(TOKEN_PLUS);
       return;
     case '-':
-      token->kind = TOKEN_MINUS;
-      token->start = *source;
-      token->len = 1;
-      ADVANCE(source);
+      SINGLE_CHAR_TOK(TOKEN_MINUS);
       return;
     case '*':
-      token->kind = TOKEN_STAR;
-      token->start = *source;
-      token->len = 1;
-      ADVANCE(source);
+      SINGLE_CHAR_TOK(TOKEN_STAR);
       return;
     case '/':
-      token->kind = TOKEN_SLASH;
-      token->start = *source;
-      token->len = 1;
-      ADVANCE(source);
+      SINGLE_CHAR_TOK(TOKEN_SLASH);
+    case ',':
+      SINGLE_CHAR_TOK(TOKEN_COMMA);
       return;
   }
+#undef SINGLE_CHAR_TOK
 
   fprintf(stderr, "Encountered an unknown character '%c'.\n", CURRENT_CHAR(source));
   token->kind = TOKEN_ERROR;
@@ -139,6 +143,7 @@ typedef enum
   BINOP_SUB = TOKEN_MINUS,
   BINOP_MUL = TOKEN_STAR,
   BINOP_DIV = TOKEN_SLASH,
+  BINOP_SEQ = TOKEN_COMMA,
 } BINARY_OPERATION_KIND;
 
 typedef enum
@@ -267,6 +272,27 @@ AST_NODE *ParseSum(PARSER_STATE *state)
   return left;
 }
 
+AST_NODE *ParseSequence(PARSER_STATE *state)
+{
+  AST_NODE *left = ParseSum(state);
+
+  TOKEN next_token = PeekToken(state);
+  if (next_token.kind == TOKEN_COMMA)
+  {
+    ConsumePeekedToken(state);
+
+    AST_NODE *node = malloc(sizeof(*node));
+    node->kind = NODE_BINARY_OPERATION;
+    node->binary_operation.left = left;
+    node->binary_operation.right = ParseSequence(state);
+    node->binary_operation.op = BINOP_SEQ;
+
+    left = node;
+  }
+
+  return left;
+}
+
 AST_NODE *ParseProgram(char const *source)
 {
   PARSER_STATE state = {
@@ -274,7 +300,7 @@ AST_NODE *ParseProgram(char const *source)
       .has_peeked_token = false,
   };
 
-  AST_NODE *node = ParseSum(&state);
+  AST_NODE *node = ParseSequence(&state);
   ParseEOF(&state);
 
   return node;
@@ -322,6 +348,8 @@ double EvaluateBinaryOperation(AST_NODE *node)
       return left * right;
     case BINOP_DIV:
       return left / right;
+    case BINOP_SEQ:
+      return right;
   }
 
   assert(!"EvaluateBinaryOperation: unreachable");
