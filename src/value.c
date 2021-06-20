@@ -9,9 +9,9 @@ VALUE ValueNumber(double number)
   return (VALUE){.kind = VALUE_NUMBER, .number = number};
 }
 
-VALUE ValueLambda(AST_NODE *body)
+VALUE ValueLambda(FN_PARAM *params, AST_NODE *body)
 {
-  LAMBDA lambda = (LAMBDA){.body = CopyAST(body)};
+  LAMBDA lambda = (LAMBDA){.params = CopyFnParams(params), .body = CopyAST(body)};
   return (VALUE){.kind = VALUE_LAMBDA, .lambda = lambda};
 }
 

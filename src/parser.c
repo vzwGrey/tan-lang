@@ -53,6 +53,7 @@ static TOKEN PeekToken(PARSER_STATE *state)
 }
 
 static AST_NODE *ParseSequence(PARSER_STATE *state);
+static AST_NODE *ParseAssignment(PARSER_STATE *state);
 
 static void ParseEOF(PARSER_STATE *state)
 {
@@ -81,18 +82,71 @@ static AST_NODE *ParseVariable(PARSER_STATE *state)
   return node;
 }
 
+static FN_PARAM *ParseParam(PARSER_STATE *state)
+{
+  TOKEN name = ExpectToken(state, TOKEN_IDENT);
+  FN_PARAM *param = malloc(sizeof(*param));
+  param->name = strndup(name.start, name.len);
+  param->next = NULL;
+  return param;
+}
+
+static FN_PARAM *ParseParams(PARSER_STATE *state)
+{
+  if (PeekToken(state).kind != TOKEN_IDENT)
+    return NULL;
+
+  FN_PARAM *param = ParseParam(state);
+
+  while (PeekToken(state).kind == TOKEN_COMMA)
+  {
+    ConsumePeekedToken(state);
+    FN_PARAM *next_param = ParseParam(state);
+    AppendFnParam(param, next_param);
+  }
+
+  return param;
+}
+
 static AST_NODE *ParseLambda(PARSER_STATE *state)
 {
   ExpectToken(state, TOKEN_FN);
   ExpectToken(state, TOKEN_OPAREN);
+  FN_PARAM *params = ParseParams(state);
   ExpectToken(state, TOKEN_CPAREN);
   ExpectToken(state, TOKEN_OBRACE);
   AST_NODE *lambda = malloc(sizeof(*lambda));
   lambda->kind = NODE_LAMBDA;
+  lambda->lambda.params = params;
   lambda->lambda.body = ParseSequence(state);
   ExpectToken(state, TOKEN_CBRACE);
 
   return lambda;
+}
+
+static FN_ARG *ParseArg(PARSER_STATE *state)
+{
+  FN_ARG *arg = malloc(sizeof(*arg));
+  arg->value = ParseAssignment(state);
+  arg->next = NULL;
+  return arg;
+}
+
+static FN_ARG *ParseArgs(PARSER_STATE *state)
+{
+  if (PeekToken(state).kind == TOKEN_CPAREN)
+    return NULL;
+
+  FN_ARG *arg = ParseArg(state);
+
+  while (PeekToken(state).kind == TOKEN_COMMA)
+  {
+    ConsumePeekedToken(state);
+    FN_ARG *next_arg = ParseArg(state);
+    AppendFnArg(arg, next_arg);
+  }
+
+  return arg;
 }
 
 static AST_NODE *ParseTerm(PARSER_STATE *state)
@@ -120,6 +174,7 @@ static AST_NODE *ParseTerm(PARSER_STATE *state)
 
     AST_NODE *call = malloc(sizeof(*call));
     call->kind = NODE_CALL;
+    call->call.args = ParseArgs(state);
     call->call.fn = term;
 
     ExpectToken(state, TOKEN_CPAREN);

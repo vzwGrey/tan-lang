@@ -1,35 +1,62 @@
 #include <assert.h>
+#include <stdbool.h>
 #include <string.h>
 
 #include "interpreter.h"
 #include "unreachable.h"
 
-INTERPRETER_STATE NewInterpreterState(size_t num_variables)
+static void PushNewScope(INTERPRETER_STATE *state);
+static void PopScope(INTERPRETER_STATE *state);
+
+INTERPRETER_STATE NewInterpreterState(size_t variables_per_scope)
 {
-  return (INTERPRETER_STATE){
-      .variables = malloc(sizeof(VARIABLE) * num_variables),
-      .num_variables = num_variables,
+  INTERPRETER_STATE state = (INTERPRETER_STATE){
+      .current_scope = NULL,
+      .variables_per_scope = variables_per_scope,
   };
+  PushNewScope(&state);
+  return state;
 }
+
 void FreeInterpreterState(INTERPRETER_STATE *state)
 {
-  for (size_t i = 0; i < state->num_variables; i++)
+  while (state->current_scope != NULL)
+    PopScope(state);
+}
+
+static void PushNewScope(INTERPRETER_STATE *state)
+{
+  SCOPE *new_scope = malloc(sizeof(*new_scope));
+  new_scope->upper_scope = state->current_scope;
+  new_scope->variables = malloc(sizeof(VARIABLE) * state->variables_per_scope);
+  state->current_scope = new_scope;
+}
+
+static void PopScope(INTERPRETER_STATE *state)
+{
+  SCOPE *current_scope = state->current_scope;
+  SCOPE *upper_scope = current_scope->upper_scope;
+
+  for (size_t i = 0; i < state->variables_per_scope; i++)
   {
-    VARIABLE *var = &state->variables[i];
+    VARIABLE *var = &current_scope->variables[i];
     if (var->name != NULL)
     {
       free(var->name);
       FreeValue(&var->value);
     }
   }
-  free(state->variables);
+  free(current_scope->variables);
+  free(current_scope);
+
+  state->current_scope = upper_scope;
 }
 
 static void SetVariable(INTERPRETER_STATE *state, char const *name, VALUE value)
 {
-  for (size_t i = 0; i < state->num_variables; i++)
+  for (size_t i = 0; i < state->variables_per_scope; i++)
   {
-    VARIABLE *var = &state->variables[i];
+    VARIABLE *var = &state->current_scope->variables[i];
     if (var->name != NULL && strcmp(var->name, name) == 0)
     {
       var->value = value;
@@ -37,9 +64,9 @@ static void SetVariable(INTERPRETER_STATE *state, char const *name, VALUE value)
     }
   }
 
-  for (size_t i = 0; i < state->num_variables; i++)
+  for (size_t i = 0; i < state->variables_per_scope; i++)
   {
-    VARIABLE *var = &state->variables[i];
+    VARIABLE *var = &state->current_scope->variables[i];
     if (var->name == NULL)
     {
       var->name = strdup(name);
@@ -53,14 +80,15 @@ static void SetVariable(INTERPRETER_STATE *state, char const *name, VALUE value)
 
 static VALUE GetVariable(INTERPRETER_STATE *state, char const *name)
 {
-  for (size_t i = 0; i < state->num_variables; i++)
-  {
-    VARIABLE *var = &state->variables[i];
-    if (var->name != NULL && strcmp(var->name, name) == 0)
+  for (SCOPE *scope = state->current_scope; scope != NULL; scope = scope->upper_scope)
+    for (size_t i = 0; i < state->variables_per_scope; i++)
     {
-      return var->value;
+      VARIABLE *var = &scope->variables[i];
+      if (var->name != NULL && strcmp(var->name, name) == 0)
+      {
+        return var->value;
+      }
     }
-  }
 
   assert(!"GetVariable: unknown variable.");
   unreachable();
@@ -113,7 +141,7 @@ static VALUE EvaluateVariable(INTERPRETER_STATE *state, AST_NODE *node)
 static VALUE EvaluateLambda(INTERPRETER_STATE *state, AST_NODE *node)
 {
   assert(node->kind == NODE_LAMBDA);
-  return ValueLambda(node->lambda.body);
+  return ValueLambda(node->lambda.params, node->lambda.body);
 }
 
 static VALUE EvaluateCall(INTERPRETER_STATE *state, AST_NODE *node)
@@ -121,7 +149,32 @@ static VALUE EvaluateCall(INTERPRETER_STATE *state, AST_NODE *node)
   assert(node->kind == NODE_CALL);
   VALUE fn = Evaluate(state, node->call.fn);
   assert(fn.kind == VALUE_LAMBDA && "EvaluateCall: only functions can be called");
-  return Evaluate(state, fn.lambda.body);
+
+  PushNewScope(state);
+
+  FN_PARAM *current_param = fn.lambda.params;
+  FN_ARG *current_arg = node->call.args;
+
+  while (true)
+  {
+    if (current_param == NULL && current_arg == NULL)
+      break;
+
+    if ((current_param == NULL && current_arg != NULL) ||
+        (current_param != NULL && current_arg == NULL))
+    {
+      assert(!"EvaluateCall: number of arguments does not match number of function parameters");
+    }
+
+    SetVariable(state, current_param->name, Evaluate(state, current_arg->value));
+
+    current_param = current_param->next;
+    current_arg = current_arg->next;
+  }
+
+  VALUE fn_ret = Evaluate(state, fn.lambda.body);
+  PopScope(state);
+  return fn_ret;
 }
 
 VALUE Evaluate(INTERPRETER_STATE *state, AST_NODE *node)

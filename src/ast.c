@@ -24,9 +24,11 @@ AST_NODE *CopyAST(AST_NODE *node)
       copy->variable = strdup(node->variable);
       break;
     case NODE_LAMBDA:
+      copy->lambda.params = CopyFnParams(node->lambda.params);
       copy->lambda.body = CopyAST(node->lambda.body);
       break;
     case NODE_CALL:
+      copy->call.args = CopyFnArgs(node->call.args);
       copy->call.fn = CopyAST(node->call.fn);
       break;
   }
@@ -51,14 +53,94 @@ void FreeAST(AST_NODE *node)
     case NODE_VARIABLE:
       free(node->variable);
       break;
-    case NODE_LAMBDA:
+    case NODE_LAMBDA: {
+      FN_PARAM *param = node->lambda.params;
+      while (param != NULL)
+      {
+        free(param->name);
+
+        FN_PARAM *tmp = param;
+        param = param->next;
+        free(tmp);
+      }
       if (node->lambda.body != NULL)
         FreeAST(node->lambda.body);
       break;
-    case NODE_CALL:
+    }
+    case NODE_CALL: {
+      FN_ARG *arg = node->call.args;
+      while (arg != NULL)
+      {
+        FreeAST(arg->value);
+
+        FN_ARG *tmp = arg;
+        arg = arg->next;
+        free(tmp);
+      }
       FreeAST(node->call.fn);
       break;
+    }
   }
 
   free(node);
+}
+
+FN_PARAM *CopyFnParams(FN_PARAM *params)
+{
+  FN_PARAM *copy = NULL;
+  for (FN_PARAM *param = params; param != NULL; param = param->next)
+  {
+    if (copy == NULL)
+    {
+      copy = malloc(sizeof(*copy));
+      copy->name = strdup(param->name);
+      copy->next = NULL;
+    }
+    else
+    {
+      FN_PARAM *next_copy = malloc(sizeof(*next_copy));
+      next_copy->name = strdup(param->name);
+      next_copy->next = NULL;
+      AppendFnParam(copy, next_copy);
+    }
+  }
+  return copy;
+}
+
+void AppendFnParam(FN_PARAM *params, FN_PARAM *new_param)
+{
+  FN_PARAM *last = params;
+  while (last->next != NULL)
+    last = last->next;
+  last->next = new_param;
+}
+
+FN_ARG *CopyFnArgs(FN_ARG *args)
+{
+  FN_ARG *copy = NULL;
+  for (FN_ARG *arg = args; arg != NULL; arg = arg->next)
+  {
+    if (copy == NULL)
+    {
+      copy = malloc(sizeof(*copy));
+      copy->value = CopyAST(arg->value);
+      copy->next = NULL;
+    }
+    else
+    {
+      FN_ARG *next_copy = malloc(sizeof(*next_copy));
+      next_copy->value = CopyAST(arg->value);
+      next_copy->next = NULL;
+      AppendFnArg(copy, next_copy);
+    }
+  }
+  return copy;
+}
+
+void AppendFnArg(FN_ARG *args, FN_ARG *new_arg)
+{
+  FN_ARG *last = args;
+  while (last->next != NULL)
+    last = last->next;
+  last->next = new_arg;
 }

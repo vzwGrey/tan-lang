@@ -4,6 +4,7 @@
 
 typedef struct
 {
+  FN_PARAM *params;
   AST_NODE *body;
 } LAMBDA;
 
@@ -24,7 +25,7 @@ typedef struct
 } VALUE;
 
 VALUE ValueNumber(double number);
-VALUE ValueLambda(AST_NODE *body);
+VALUE ValueLambda(FN_PARAM *params, AST_NODE *body);
 void FreeValue(VALUE *value);
 VALUE ValueAdd(VALUE left, VALUE right);
 VALUE ValueSub(VALUE left, VALUE right);
