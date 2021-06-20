@@ -142,6 +142,7 @@ static VALUE EvaluateVariable(INTERPRETER_STATE *state, AST_NODE *node)
 
 static VALUE EvaluateLambda(INTERPRETER_STATE *state, AST_NODE *node)
 {
+  (void)state;
   assert(node->kind == NODE_LAMBDA);
   return ValueLambda(node->lambda.params, node->lambda.body);
 }
