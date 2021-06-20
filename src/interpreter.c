@@ -122,6 +122,8 @@ static VALUE EvaluateBinaryOperation(INTERPRETER_STATE *state, AST_NODE *node)
     case BINOP_SEQ:
       return right;
   }
+
+  unreachable();
 }
 
 static VALUE EvaluateAssignment(INTERPRETER_STATE *state, AST_NODE *node)
