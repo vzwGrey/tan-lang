@@ -168,7 +168,7 @@ static AST_NODE *ParseTerm(PARSER_STATE *state)
   }
 
   TOKEN oparen = PeekToken(state);
-  if (oparen.kind == TOKEN_OPAREN)
+  while (oparen.kind == TOKEN_OPAREN)
   {
     ConsumePeekedToken(state);
 
@@ -179,7 +179,9 @@ static AST_NODE *ParseTerm(PARSER_STATE *state)
 
     ExpectToken(state, TOKEN_CPAREN);
 
-    return call;
+    term = call;
+
+    oparen = PeekToken(state);
   }
 
   return term;
