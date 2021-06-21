@@ -31,6 +31,11 @@ AST_NODE *CopyAST(AST_NODE *node)
       copy->call.args = CopyFnArgs(node->call.args);
       copy->call.fn = CopyAST(node->call.fn);
       break;
+    case NODE_IF_ELSE:
+      copy->if_else.condition = CopyAST(node->if_else.condition);
+      copy->if_else.if_true = CopyAST(node->if_else.if_true);
+      copy->if_else.if_false = CopyAST(node->if_else.if_false);
+      break;
   }
 
   return copy;
@@ -80,6 +85,11 @@ void FreeAST(AST_NODE *node)
       FreeAST(node->call.fn);
       break;
     }
+    case NODE_IF_ELSE:
+      FreeAST(node->if_else.condition);
+      FreeAST(node->if_else.if_true);
+      FreeAST(node->if_else.if_false);
+      break;
   }
 
   free(node);

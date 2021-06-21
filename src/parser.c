@@ -257,9 +257,41 @@ static AST_NODE *ParseAssignment(PARSER_STATE *state)
     return ParseSum(state);
 }
 
+static AST_NODE *ParseIfElse(PARSER_STATE *state)
+{
+  TOKEN if_tok = PeekToken(state);
+  if (if_tok.kind == TOKEN_IF)
+  {
+    ConsumePeekedToken(state);
+
+    ExpectToken(state, TOKEN_OPAREN);
+    AST_NODE *condition = ParseAssignment(state);
+    ExpectToken(state, TOKEN_CPAREN);
+
+    ExpectToken(state, TOKEN_OBRACE);
+    AST_NODE *if_true = ParseIfElse(state);
+    ExpectToken(state, TOKEN_CBRACE);
+
+    ExpectToken(state, TOKEN_ELSE);
+    ExpectToken(state, TOKEN_OBRACE);
+    AST_NODE *if_false = ParseIfElse(state);
+    ExpectToken(state, TOKEN_CBRACE);
+
+    AST_NODE *if_else = malloc(sizeof(*if_else));
+    if_else->kind = NODE_IF_ELSE;
+    if_else->if_else.condition = condition;
+    if_else->if_else.if_true = if_true;
+    if_else->if_else.if_false = if_false;
+
+    return if_else;
+  }
+  else
+    return ParseAssignment(state);
+}
+
 static AST_NODE *ParseSequence(PARSER_STATE *state)
 {
-  AST_NODE *left = ParseAssignment(state);
+  AST_NODE *left = ParseIfElse(state);
 
   TOKEN next_token = PeekToken(state);
   if (next_token.kind == TOKEN_COMMA)

@@ -180,6 +180,16 @@ static VALUE EvaluateCall(INTERPRETER_STATE *state, AST_NODE *node)
   return fn_ret;
 }
 
+static VALUE EvaluateIfElse(INTERPRETER_STATE *state, AST_NODE *node)
+{
+  assert(node->kind == NODE_IF_ELSE);
+  VALUE condition = Evaluate(state, node->if_else.condition);
+  if (condition.kind != VALUE_NUMBER || condition.number != 0.0)
+    return Evaluate(state, node->if_else.if_true);
+  else
+    return Evaluate(state, node->if_else.if_false);
+}
+
 VALUE Evaluate(INTERPRETER_STATE *state, AST_NODE *node)
 {
   switch (node->kind)
@@ -196,6 +206,8 @@ VALUE Evaluate(INTERPRETER_STATE *state, AST_NODE *node)
       return EvaluateLambda(state, node);
     case NODE_CALL:
       return EvaluateCall(state, node);
+    case NODE_IF_ELSE:
+      return EvaluateIfElse(state, node);
   }
 
   assert(!"EvaluateProgram: unreachable");

@@ -2,6 +2,7 @@
 #include <ctype.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "lexer.h"
 
@@ -39,6 +40,10 @@ char const *TokenKindName(TOKEN_KIND kind)
       return "'}'";
     case TOKEN_FN:
       return "'fn'";
+    case TOKEN_IF:
+      return "'if'";
+    case TOKEN_ELSE:
+      return "'else'";
   }
 
   assert(!"TokenKindName: unreachable");
@@ -96,6 +101,32 @@ void NextToken(char const **source, TOKEN *token)
     token->start = *source;
     token->len = 2;
 
+    ADVANCE(source);
+    ADVANCE(source);
+
+    return;
+  }
+
+  if (strncmp("if", *source, 2) == 0)
+  {
+    token->kind = TOKEN_IF;
+    token->start = *source;
+    token->len = 2;
+
+    ADVANCE(source);
+    ADVANCE(source);
+
+    return;
+  }
+
+  if (strncmp("else", *source, 4) == 0)
+  {
+    token->kind = TOKEN_ELSE;
+    token->start = *source;
+    token->len = 4;
+
+    ADVANCE(source);
+    ADVANCE(source);
     ADVANCE(source);
     ADVANCE(source);
 

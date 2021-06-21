@@ -33,6 +33,7 @@ typedef enum
   NODE_VARIABLE,
   NODE_LAMBDA,
   NODE_CALL,
+  NODE_IF_ELSE,
 } AST_NODE_KIND;
 
 typedef struct AST_NODE
@@ -63,6 +64,12 @@ typedef struct AST_NODE
       FN_ARG *args;
       struct AST_NODE *fn;
     } call;
+    struct
+    {
+      struct AST_NODE *condition;
+      struct AST_NODE *if_true;
+      struct AST_NODE *if_false;
+    } if_else;
   };
 } AST_NODE;
 

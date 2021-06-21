@@ -19,6 +19,8 @@ typedef enum
   TOKEN_OBRACE,
   TOKEN_CBRACE,
   TOKEN_FN,
+  TOKEN_IF,
+  TOKEN_ELSE,
 } TOKEN_KIND;
 
 typedef struct
